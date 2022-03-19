@@ -20,8 +20,15 @@ if __name__ == '__main__':
     for carrier in carriers:
         threads += crawlerEnter(carrier)
         LOGD('len_threads: {}'.format(len(threads)))
+    start = 0
+    end = len(threads)
+    if len(sys.argv) == 3:
+        start = int(sys.argv[2])
+    elif len(sys.argv) == 4:
+        start = int(sys.argv[2])
+        end = int(sys.argv[3])
 
-    runthreads = runThreads(threads)
+    runthreads = runThreads(threads, start, end)
     runthreads.run()
 
     LOGI('main thread end')

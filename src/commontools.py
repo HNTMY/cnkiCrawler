@@ -30,7 +30,7 @@ def isElementPresent(driver, by, value):
         用来判断元素标签是否存在，
         """
         try:
-            element = driver.find_element(by=by, value=value)
+            driver.find_element(by=by, value=value)
         # 原文是except NoSuchElementException, e:
         except NoSuchElementException as e:
             # 发生了NoSuchElementException异常，说明页面中未找到该元素，返回False
