@@ -62,13 +62,20 @@ def openWxfl(carrier):
             if timeout >= timeOutTotal:
                 timeoutFlag = True
                 break
+            LOGI('get driver')
             driver = getChromeDriver(options)
 
+            LOGI('get url')
             driver.get(cnkiUrl)
             homePage = driver.current_window_handle
 
+            LOGI('clickopenwindow')
             highSearch = clickOpenWindow(driver, driver, homePage, By.ID, 'highSearch')
+            LOGI('switch to window {}'.format(homePage))
+            driver.switch_to.window(homePage)
+            LOGI('close homepage')
             driver.close()
+            LOGI('switch to window {}'.format(highSearch))
             driver.switch_to.window(highSearch)
             break
         except:
@@ -89,22 +96,30 @@ def openWxfl(carrier):
             if carrier == 'xsqk':
                 # 点击学术期刊，中文，SCI来源
                 WebDriverWait(driver, timeOutTotal, perTime).until(EC.presence_of_element_located((By.CSS_SELECTOR, 'li[data-id="xsqk"]')))
+                LOGI('click xsqk')
                 driver.find_element(by = By.CSS_SELECTOR, value = 'li[data-id="xsqk"]').click()
                 WebDriverWait(driver, timeOutTotal, perTime).until(EC.presence_of_element_located((By.CSS_SELECTOR, 'a.ch')))
+                LOGI('click cn')
                 driver.find_element(by = By.CSS_SELECTOR, value = 'a.ch').click()
                 WebDriverWait(driver, timeOutTotal, perTime).until(EC.presence_of_element_located((By.CSS_SELECTOR, 'input[key="SI"]')))
+                LOGI('click SCI')
                 driver.find_element(by = By.CSS_SELECTOR, value = 'input[key="SI"]').click()
                 # 点击文献分类
+                LOGI('click wxfl')
                 driver.find_element(by = By.CSS_SELECTOR, value = 'a.icon-arrow').click()
                 break
             elif carrier == 'hy':
                 # 点击会议，语种选择中文
                 WebDriverWait(driver, timeOutTotal, perTime).until(EC.presence_of_element_located((By.CSS_SELECTOR, 'li[data-id="hy"]')))
+                LOGI('click hy')
                 driver.find_element(by = By.CSS_SELECTOR, value = 'li[data-id="hy"]').click()
                 WebDriverWait(driver, timeOutTotal, perTime).until(EC.presence_of_element_located((By.CSS_SELECTOR, 'div[data-title="语种"]')))
+                LOGI('click language')
                 driver.find_element(by = By.CSS_SELECTOR, value = 'div[data-title="语种"]').click()
+                LOGI('click chinese')
                 driver.find_elements(by = By.CSS_SELECTOR, value = 'div[data-title="语种"]>div>ul>li')[1].click()
                 # 点击文献分类
+                LOGI('click wxfl')
                 driver.find_element(by = By.CSS_SELECTOR, value = 'a.icon-arrow').click()
                 break
             else:
@@ -132,8 +147,11 @@ def crawlerEnter(carrier, index = None):
 
     while True:
         try:
+            LOGI('find wxfl list')
             wxfl = driver.find_element(by = By.CSS_SELECTOR, value = 'ul#defult.nav-content-list')
+            LOGI('get wxfl list')
             list = wxfl.find_elements(by = By.CSS_SELECTOR, value = 'li')
+            LOGI('ergodic wxfl list')
             for li in list:
                 li.text
             break
@@ -145,6 +163,7 @@ def crawlerEnter(carrier, index = None):
     classes = []
     for i in range(wxflNum):
         classes.append(list[i].text)
+    LOGI('quit driver')
     driver.quit()
 
     '''
@@ -169,6 +188,8 @@ def processResult(crawler):
     newHighSearch = crawler.pageId
     carrier = crawler.carrier
     cnt = 0
+    page = 0
+    LOGI('switch to {}'.format(newHighSearch))
     driver.switch_to.window(newHighSearch)
     maxNum = 0
     currentWindowsNum = len(driver.window_handles)
@@ -178,9 +199,17 @@ def processResult(crawler):
         maxNum = hyNum
     if isElementPresent(driver, By.CSS_SELECTOR, 'table.result-table-list>tbody'):
         while True:
+            while len(driver.window_handles) != 1:
+                LOGI('switch to {}'.format(driver.window_handles[1]))
+                driver.switch_to.window(driver.window_handles[1])
+                driver.close()
+            LOGI('switch to {}'.format(newHighSearch))
+            driver.switch_to.window(newHighSearch)
             flag = False
             try:
+                LOGI('find tbody')
                 tbody = driver.find_element(by = By.CSS_SELECTOR, value = 'table.result-table-list>tbody')
+                LOGI('find articles')
                 articles = tbody.find_elements(by = By.XPATH, value = './*')
             except:
                 if isElementPresent(driver, By.CSS_SELECTOR, 'table.result-table-list>tbody'):
@@ -191,45 +220,80 @@ def processResult(crawler):
                     break
             saves = []
             title = ''
-            for article in articles:
+            for i in range(len(articles)):
+                article = articles[i]
                 newTab = ''
                 try:
                     WebDriverWait(article, timeOutTotal, perTime).until(EC.presence_of_element_located((By.CSS_SELECTOR, 'td.name>a')))
+                    LOGI('find article')
                     art = article.find_element(by = By.CSS_SELECTOR, value = 'td.name>a')
+                    LOGI('click article')
                     art.click()
                 except StaleElementReferenceException:
                     LOGI('StaleElementReferenceException, exit')
                     if len(driver.window_handles) != currentWindowsNum:
+                        LOGI('new tab')
                         newTab = driver.window_handles[len(driver.window_handles)-1]
+                        LOGI('switch to {}'.format(newTab))
                         driver.switch_to.window(newTab)
+                        LOGI('close {}'.format(newTab))
                         driver.close()
+                        LOGI('switch to {}'.format(newHighSearch))
                         driver.switch_to.window(newHighSearch)
-                    flag = True
+                    if i == 0:
+                        flag = True
                     break
                 except ElementClickInterceptedException:
                     LOGI('ElementClickInterceptedException, try again')
                     time.sleep(2)
+                    if len(driver.window_handles) != currentWindowsNum:
+                        LOGI('new tab')
+                        newTab = driver.window_handles[len(driver.window_handles)-1]
+                        LOGI('switch to {}'.format(newTab))
+                        driver.switch_to.window(newTab)
+                        LOGI('close {}'.format(newTab))
+                        driver.close()
+                        LOGI('switch to {}'.format(newHighSearch))
+                        driver.switch_to.window(newHighSearch)
                     continue
                 except TimeoutException:
                     LOGI('TimeoutException, try again')
+                    if len(driver.window_handles) != currentWindowsNum:
+                        LOGI('new tab')
+                        newTab = driver.window_handles[len(driver.window_handles)-1]
+                        LOGI('switch to {}'.format(newTab))
+                        driver.switch_to.window(newTab)
+                        LOGI('close {}'.format(newTab))
+                        driver.close()
+                        LOGI('switch to {}'.format(newHighSearch))
+                        driver.switch_to.window(newHighSearch)
                     continue
                 except Exception:
                     LOGI('Exception, exit')
                     if len(driver.window_handles) != currentWindowsNum:
+                        LOGI('new tab')
                         newTab = driver.window_handles[len(driver.window_handles)-1]
+                        LOGI('switch to {}'.format(newTab))
                         driver.switch_to.window(newTab)
+                        LOGI('close {}'.format(newTab))
                         driver.close()
+                        LOGI('switch to {}'.format(newHighSearch))
                         driver.switch_to.window(newHighSearch)
-                    flag = True
+                    if i == 0:
+                        flag = True
                     break
                 try:
                     title = art.text
                 except:
                     LOGI('no article, next')
                     if len(driver.window_handles) != currentWindowsNum:
+                        LOGI('new tab')
                         newTab = driver.window_handles[len(driver.window_handles)-1]
+                        LOGI('switch to {}'.format(newTab))
                         driver.switch_to.window(newTab)
+                        LOGI('close {}'.format(newTab))
                         driver.close()
+                        LOGI('switch to {}'.format(newHighSearch))
                         driver.switch_to.window(newHighSearch)
                     continue
                 cnNum = 0
@@ -238,21 +302,27 @@ def processResult(crawler):
                     if char >= '\u4e00' and char <= '\u9fa5':
                         cnNum += 1
                 if cnNum/totalNum < cnPercent or totalNum < titleLenThreshold:
+                    LOGI(crawler.wxfl, page, title)
                     if len(driver.window_handles) != currentWindowsNum:
+                        LOGI('new tab')
                         newTab = driver.window_handles[len(driver.window_handles)-1]
+                        LOGI('switch to {}'.format(newTab))
                         driver.switch_to.window(newTab)
+                        LOGI('close {}'.format(newTab))
                         driver.close()
+                        LOGI('switch to {}'.format(newHighSearch))
                         driver.switch_to.window(newHighSearch)
-                    time.sleep(1)
                     continue
-                LOGI(crawler.wxfl, title)
+                LOGI(crawler.wxfl, page, title)
                 LOGD('driver handles size:', len(driver.window_handles))
                 if len(driver.window_handles) == currentWindowsNum:
                     LOGI('window count: {}'.format(len(driver.window_handles)))
                     LOGI(driver.window_handles, newHighSearch)
                     continue
                 try:
+                    LOGI('new tab')
                     newTab = driver.window_handles[len(driver.window_handles)-1]
+                    LOGI('switch to {}'.format(newTab))
                     driver.switch_to.window(newTab)
                     if(carrier == 'xsqk'):
                         save = xsqkResult(driver)
@@ -268,9 +338,13 @@ def processResult(crawler):
                     print(e, 'save article info error, next')
                 finally:
                     if len(driver.window_handles) != currentWindowsNum:
+                        LOGI('new tab')
                         newTab = driver.window_handles[len(driver.window_handles)-1]
+                        LOGI('switch to {}'.format(newTab))
                         driver.switch_to.window(newTab)
+                        LOGI('close {}'.format(newTab))
                         driver.close()
+                        LOGI('switch to {}'.format(newHighSearch))
                         driver.switch_to.window(newHighSearch)
                     LOGD('driver handles size:', len(driver.window_handles))
                 if cnt >= maxNum:
@@ -284,8 +358,11 @@ def processResult(crawler):
                 break
             if(isElementPresent(driver, By.CSS_SELECTOR, 'a#PageNext')):
                 try:
+                    LOGI('find pagenext')
                     nextPage = driver.find_element(by = By.CSS_SELECTOR, value = 'a#PageNext')
+                    LOGI('click pagenext')
                     nextPage.click()
+                    page += 1
                 except:
                     break
             else:
@@ -300,6 +377,7 @@ def xsqkResult(driver):
         try:
             if timeout >= timeOutTotal:
                 return None
+            LOGI('find more summary')
             moreEle = driver.find_element(by = By.CSS_SELECTOR, value = 'a#ChDivSummaryMore')
             break
         except:
@@ -307,12 +385,14 @@ def xsqkResult(driver):
             time.sleep(perTime)
             timeout += perTime
             continue
+    LOGI('get more summary style dispaly')
     if(moreEle.get_attribute('style') != 'display: none;'):
         timeout = 0
         while True:
             try:
                 if timeout >= timeOutTotal:
                     return None
+                LOGI('click more')
                 driver.execute_script('arguments[0].click()', moreEle)
                 break
             except Exception as e:
@@ -322,6 +402,7 @@ def xsqkResult(driver):
                 continue
     for css in xsqkInfoCSS:
         if isElementPresent(driver, By.CSS_SELECTOR, xsqkInfoCSS[css]):
+            LOGI('find {}'.format(css))
             eles = driver.find_elements(by = By.CSS_SELECTOR, value = xsqkInfoCSS[css])
             infoStr = ''
             for ele in eles:
@@ -338,6 +419,7 @@ def hyResult(driver):
         try:
             if timeout >= timeOutTotal:
                 return None
+            LOGI('find more summary')
             moreEle = driver.find_element(by = By.CSS_SELECTOR, value = 'a#ChDivSummaryMore')
             break
         except:
@@ -345,22 +427,24 @@ def hyResult(driver):
             time.sleep(perTime)
             timeout += perTime
             continue
+    LOGI('get more summary style dispaly')
     if(moreEle.get_attribute('style') != 'display: none;'):
         timeout = 0
         while True:
             try:
                 if timeout >= timeOutTotal:
                     return None
+                LOGI('click more')
                 driver.execute_script('arguments[0].click()', moreEle)
+                break
             except Exception as e:
                 print(e, 'click more error, again')
                 time.sleep(perTime)
                 timeout += perTime
                 continue
-            else:
-                break
     for css in hyInfoCSS:
         if isElementPresent(driver, By.CSS_SELECTOR, hyInfoCSS[css]):
+            LOGI('find {}'.format(css))
             eles = driver.find_elements(by = By.CSS_SELECTOR, value = hyInfoCSS[css])
             infoStr = ''
             for ele in eles:
@@ -368,15 +452,19 @@ def hyResult(driver):
                 infoStr += '  '
             save[css] = infoStr
     if isElementPresent(driver, By.CSS_SELECTOR, hy_info):
+        LOGI('find {}'.format(hy_info))
         eles = driver.find_elements(by = By.CSS_SELECTOR, value = hy_info)
         for ele in eles:
             if(ele.text == '会议名称：'):
+                LOGI('find hyname')
                 infoStr = ele.find_element(by = By.XPATH, value = '../p').text
                 save['hy_hyname'] = infoStr
             elif(ele.text == '会议时间：'):
+                LOGI('find hytime')
                 infoStr = ele.find_element(by = By.XPATH, value = '../p').text
                 save['hy_hytime'] = infoStr
             elif(ele.text == '会议地点：'):
+                LOGI('find hyolace')
                 infoStr = ele.find_element(by = By.XPATH, value = '../p').text
                 save['hy_hyplace'] = infoStr
     return save
@@ -393,6 +481,7 @@ class crawler(threading.Thread):
         self.necs = []
         self.necTexts = []
         self.count = 0
+        self.startIndex = 0
         
         self.logFilePath = logFile
         if self.carrier == 'xsqk':
@@ -402,45 +491,63 @@ class crawler(threading.Thread):
         self.logFilePath += str(self.index)
 
     def init(self):
-        open(self.logFilePath, 'w+').close()
+        if self.startIndex == 0:
+            open(self.logFilePath, 'w+').close()
         LOGI(self.carrier, self.index, 'init')
     def run(self):
         # try:
         sem.acquire()
         self.init()
-        self.driver = openWxfl(self.carrier)
-        if not self.driver:
-            LOGE('openWxfl error! {}.{}'.format(self.carrier, self.index))
-            sem.release()
-            return
-        self.pageId = self.driver.current_window_handle
-        while True:
-            try:
-                wxflContent = self.driver.find_element(by = By.CSS_SELECTOR, value = 'ul#defult.nav-content-list')
-                list = wxflContent.find_elements(by = By.CSS_SELECTOR, value = 'li')
-                li = list[self.index]
-                self.ecs.append(li)
-                self.wxfl = self.ecs[0].text
-                break
-            except:
-                LOGI('ecs error, try again')
-                continue
+        flag = False
+        while not flag:
+            flag = self.crawlerArticles()
+            LOGI(self.wxfl, "deinit")
+            self.deinit()
+        db = getDB(self.carrier)
+        db.summary.update_one(filter = {'class': self.wxfl}, update = {'$set': {'count': self.count}})
+        sem.release()
+        # except BaseException as e:
+        #     print('0',e)
+        #     db = getDB(self.carrier)
+        #     db.summary.update_one(filter = {'class': self.wxfl}, update = {'$set': {'count': self.count}})
+        #     LOGI(self.wxfl, "deinit")
+        #     self.deinit()
+        #     sem.release()
+    def crawlerArticles(self):
+        try:
+            self.driver = openWxfl(self.carrier)
+            if not self.driver:
+                LOGE('openWxfl error! {}.{}, try again'.format(self.carrier, self.index))
+                return False
+            self.pageId = self.driver.current_window_handle
+            LOGI('find wxfl list')
+            wxflContent = self.driver.find_element(by = By.CSS_SELECTOR, value = 'ul#defult.nav-content-list')
+            LOGI('get wxfl list')
+            list = wxflContent.find_elements(by = By.CSS_SELECTOR, value = 'li')
+            li = list[self.index]
+            self.ecs.append(li)
+            LOGI('get wxfl text')
+            self.wxfl = self.ecs[0].text
+        except:
+            return False
         self.setName(self.wxfl)
         LOGI('载体:', self.carrier, '\t', '文献分类:', self.wxfl)
-        db = getDB(self.carrier)
-        db.summary.delete_one({'id': self.index})
-        insertDict = {}
-        insertDict['id'] = self.index
-        insertDict['class'] = self.wxfl
-        insertDict['count'] = 0
-        db.summary.insert_one(insertDict)
-        db[self.wxfl].drop()
+        if self.startIndex == 0:
+            db = getDB(self.carrier)
+            db.summary.delete_one({'id': self.index})
+            insertDict = {}
+            insertDict['id'] = self.index
+            insertDict['class'] = self.wxfl
+            insertDict['count'] = 0
+            db.summary.insert_one(insertDict)
+            db[self.wxfl].drop()
         f = open(self.logFilePath, 'a+')
         f.write(self.wxfl)
         f.close()
         # 获取所有不可扩展分类
         while len(self.ecs):
             li = self.ecs.pop()
+            LOGI('find item div')
             div = li.find_element(by = By.CSS_SELECTOR, value = 'div.item-nav')
             if isElementPresent(div, By.CSS_SELECTOR, 'i.icon'):
                 timeout = 0
@@ -450,7 +557,9 @@ class crawler(threading.Thread):
                         if timeout >= timeOutTotal:
                             flag = True
                             break
+                        LOGI('find + icon')
                         tmpEle = div.find_element(by = By.CSS_SELECTOR, value = 'i.icon')
+                        LOGI('click + icon')
                         self.driver.execute_script('arguments[0].click()', tmpEle)
                         break
                     except:
@@ -459,7 +568,7 @@ class crawler(threading.Thread):
                         timeout += perTime
                         continue
                 if flag:
-                    continue
+                    return False
                 timeout = 0
                 flag = False
                 while True:
@@ -468,6 +577,7 @@ class crawler(threading.Thread):
                             flag = True
                             break
                         WebDriverWait(li, timeOutTotal, 1).until(EC.presence_of_element_located((By.CSS_SELECTOR, 'ul > li')))
+                        LOGI('collect list')
                         tmpList = li.find_elements(by = By.CSS_SELECTOR, value = 'ul > li')
                         break
                     except:
@@ -476,7 +586,7 @@ class crawler(threading.Thread):
                         timeout += perTime
                         continue
                 if flag:
-                    continue
+                    return False
                 LOGI(div.find_element(by = By.CSS_SELECTOR, value = 'a').text)
                 LOGI(len(tmpList))
                 for tmpLi in tmpList:
@@ -484,32 +594,43 @@ class crawler(threading.Thread):
             else:
                 try:
                     WebDriverWait(li, timeOutTotal, 1).until(EC.presence_of_element_located((By.CSS_SELECTOR, 'i.icon-select')))
-                    self.necs.append(div.find_element(by = By.CSS_SELECTOR, value = 'i.icon-select'))
+                    LOGI('append necs')
+                    iconSelect = div.find_element(by = By.CSS_SELECTOR, value = 'i.icon-select')
+                    self.necs.append(iconSelect)
                     WebDriverWait(li, timeOutTotal, 1).until(EC.presence_of_element_located((By.CSS_SELECTOR, 'a')))
-                    self.necTexts.append(div.find_element(by = By.CSS_SELECTOR, value = 'a').text)
+                    LOGI('append necs text')
+                    liAText = div.find_element(by = By.CSS_SELECTOR, value = 'a').text
+                    LOGI(liAText)
+                    self.necTexts.append(liAText)
                 except:
                     LOGI('join icon-select failed, next')
         f = open(self.logFilePath, 'a+')
         f.write(' {}{}'.format(len(self.necs), '\n'))
         f.close()
-        for i in range(len(self.necs)):
+        for i in range(self.startIndex, len(self.necs)):
             # 检索此文献分类
+            self.startIndex = i
             nec = self.necs[i]
             LOGI(self.necTexts[i])
+            debugSelect = 0
             flag = False
             timeout = 0
             while True:
                 try:
+                    if debugSelect >= 20:
+                        return False
                     if timeout >= timeOutTotal:
                         flag = True
-                        break
+                        return False
                     str = nec.get_attribute('class')
                     strList = str.split(' ')
                     if 'selected' not in strList:
+                        LOGI('select wxfl')
                         self.driver.execute_script('arguments[0].setAttribute(arguments[1],arguments[2])', nec, 'class', strList[0] + ' selected')
                     break
                 except:
                     LOGI('add selected error, try again')
+                    debugSelect += 1
                     time.sleep(perTime)
                     timeout += perTime
                     continue
@@ -519,6 +640,7 @@ class crawler(threading.Thread):
                 try:
                     try:
                         WebDriverWait(self.driver, timeOutTotal, perTime).until(EC.presence_of_element_located((By.CSS_SELECTOR, 'input.search-btn')))
+                        LOGI('click search-btn')
                         self.driver.find_element(by = By.CSS_SELECTOR, value = 'input.search-btn').click()
                         break
                     except:
@@ -536,30 +658,30 @@ class crawler(threading.Thread):
             timeout = 0
             while True:
                 try:
+                    if debugSelect >= 10:
+                        return False
                     if timeout >= timeOutTotal:
                         break
+                    LOGI('cancel select wxfl')
                     self.driver.execute_script('arguments[0].setAttribute(arguments[1],arguments[2])', nec, 'class', strList[0])
                     break
                 except:
                     LOGI('cancel selected error, try again')
+                    debugSelect += 1
                     time.sleep(perTime)
                     timeout += perTime
                     continue
             f = open(self.logFilePath, 'a+')
-            f.write('\t{} {}\n'.format(self.necTexts[i], cnt))
+            f.write('\t{} {} {}\n'.format(i, self.necTexts[i], cnt))
             f.close()
-        db = getDB(self.carrier)
-        db.summary.update_one(filter = {'class': self.wxfl}, update = {'$set': {'count': self.count}})
-        LOGI(self.wxfl, "deinit")
-        self.deinit()
-        sem.release()
-        # except BaseException as e:
-        #     print('0',e)
-        #     db = getDB(self.carrier)
-        #     db.summary.update_one(filter = {'class': self.wxfl}, update = {'$set': {'count': self.count}})
-        #     LOGI(self.wxfl, "deinit")
-        #     self.deinit()
-        #     sem.release()
+        return True
+
+    def setStart(self, index):
+        self.startIndex = index
+
     def deinit(self):
         self.ecs.clear()
-        self.driver.quit()
+        self.necs.clear()
+        self.necTexts.clear()
+        if self.driver is not None:
+            self.driver.quit()

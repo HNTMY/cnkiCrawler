@@ -3,6 +3,7 @@ import threading
 # selenium
 from selenium import webdriver
 from selenium.common.exceptions import NoSuchElementException
+from crawler_log import *
 
 class Sem():
     def __init__(self, num = 2):
@@ -41,7 +42,9 @@ def isElementPresent(driver, by, value):
 
 # 点击元素并打开新标签页
 def clickOpenWindow(driver, element, index, by, value):
+    LOGI('switch to window {}'.format(index))
     driver.switch_to.window(index)
+    LOGI('click {}'.format(value))
     element.find_element(by, value).click()
     newWindow= driver.window_handles[len(driver.window_handles)-1]
     return newWindow
