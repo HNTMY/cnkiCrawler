@@ -541,6 +541,9 @@ class crawler(threading.Thread):
             insertDict['count'] = 0
             db.summary.insert_one(insertDict)
             db[self.wxfl].drop()
+        else:
+            db = getDB(self.carrier)
+            self.count = db[self.wxfl].count_documents({})
         f = open(self.logFilePath, 'a+')
         f.write(self.wxfl)
         f.close()
