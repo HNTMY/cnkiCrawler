@@ -6,7 +6,7 @@ from runThreads import *
 
 if __name__ == '__main__':
     LOGI('main thread start')
-    carriers = ['xsqk', 'hy']
+    carriers = ['qk', 'hy']
     numpre = int(sys.argv[1])
     index = sys.argv[2]
     startIndex = sys.argv[3]

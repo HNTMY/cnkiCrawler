@@ -3,6 +3,7 @@ from typing import final
 from commontools import *
 import threading
 import time
+import re
 from crawler_log import *
 from mongoDBManager import *
 from selenium.webdriver.support.wait import WebDriverWait
@@ -13,22 +14,23 @@ from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.support import expected_conditions as EC
 
 cnkiUrl = 'https://www.cnki.net/'   # 知网主页url
-xsqkNum = 50                        # 单个文献分类学术期刊最大爬取数量
+qkNum = 50                          # 单个文献分类学术期刊最大爬取数量
 hyNum = 50                          # 单个文献分类会议最大爬取数量
 
 timeOutTotal = 10                   # 超时等待总时间
 perTime = 1                         # 轮询时间
 
-xsqkDB = 'xsqk'               # 学术期刊数据库名
+qkDB = 'qk'                   # 学术期刊数据库名
 hyDB = 'hy'                   # 会议数据库名
 
 cnPercent = 0.3               # 标题中中文所占比例阈值
 titleLenThreshold = 4         # 标题长度最小阈值
+abstractLenThreshold = 20     # 摘要长度最小阈值
 
 logFile = r'../log/log'
 
 # 学术期刊
-xsqkInfoCSS = {
+qkInfoCSS = {
     'qk_name': r'div.top-tip > span > a',        # 所属期刊名称及时间(可能没有时间)
     'qk_netTime': r'div.head-time > span',       # 文献网络首发时间
     'qk_title': r'div.wx-tit > h1',              # 文献标题
@@ -93,7 +95,7 @@ def openWxfl(carrier):
             if timeout >= timeOutTotal:
                 timeoutFlag = True
                 break
-            if carrier == 'xsqk':
+            if carrier == 'qk':
                 # 点击学术期刊，中文，SCI来源
                 WebDriverWait(driver, timeOutTotal, perTime).until(EC.presence_of_element_located((By.CSS_SELECTOR, 'li[data-id="xsqk"]')))
                 LOGI('click xsqk')
@@ -193,8 +195,8 @@ def processResult(crawler):
     driver.switch_to.window(newHighSearch)
     maxNum = 0
     currentWindowsNum = len(driver.window_handles)
-    if(carrier == 'xsqk'):
-        maxNum = xsqkNum
+    if(carrier == 'qk'):
+        maxNum = qkNum
     elif(carrier == 'hy'):
         maxNum = hyNum
     if isElementPresent(driver, By.CSS_SELECTOR, 'table.result-table-list>tbody'):
@@ -296,23 +298,6 @@ def processResult(crawler):
                         LOGI('switch to {}'.format(newHighSearch))
                         driver.switch_to.window(newHighSearch)
                     continue
-                cnNum = 0
-                totalNum = len(title)
-                for char in title:
-                    if char >= '\u4e00' and char <= '\u9fa5':
-                        cnNum += 1
-                if cnNum/totalNum < cnPercent or totalNum < titleLenThreshold:
-                    LOGI(crawler.wxfl, page, title)
-                    if len(driver.window_handles) != currentWindowsNum:
-                        LOGI('new tab')
-                        newTab = driver.window_handles[len(driver.window_handles)-1]
-                        LOGI('switch to {}'.format(newTab))
-                        driver.switch_to.window(newTab)
-                        LOGI('close {}'.format(newTab))
-                        driver.close()
-                        LOGI('switch to {}'.format(newHighSearch))
-                        driver.switch_to.window(newHighSearch)
-                    continue
                 LOGI(crawler.wxfl, page, title)
                 LOGD('driver handles size:', len(driver.window_handles))
                 if len(driver.window_handles) == currentWindowsNum:
@@ -324,8 +309,8 @@ def processResult(crawler):
                     newTab = driver.window_handles[len(driver.window_handles)-1]
                     LOGI('switch to {}'.format(newTab))
                     driver.switch_to.window(newTab)
-                    if(carrier == 'xsqk'):
-                        save = xsqkResult(driver)
+                    if(carrier == 'qk'):
+                        save = qkResult(driver)
                         if save != None:
                             saves.append(save)
                             cnt = cnt + 1
@@ -352,8 +337,10 @@ def processResult(crawler):
             if flag:
                 continue
             if len(saves) > 0:
-                collection = getCollection(crawler.carrier, crawler.wxfl)
+                mongoClient = getClient()
+                collection = mongoClient[crawler.carrier][crawler.wxfl]
                 collection.insert_many(saves)
+                closeClient(mongoClient)
             if cnt >= maxNum:
                 break
             if(isElementPresent(driver, By.CSS_SELECTOR, 'a#PageNext')):
@@ -369,8 +356,19 @@ def processResult(crawler):
                 break
     return cnt
 
-def xsqkResult(driver):
+def qkResult(driver):
     # 学术期刊
+    if not isElementPresent(driver, By.CSS_SELECTOR, r'span#ChDivSummary'):
+        return None
+    abstract = driver.find_element(by = By.CSS_SELECTOR, value = r'span#ChDivSummary').text
+    cnNum = 0
+    totalNum = len(abstract)
+    for char in abstract:
+        if char >= '\u4e00' and char <= '\u9fa5':
+            cnNum += 1
+    if cnNum/totalNum < cnPercent or totalNum < abstractLenThreshold:
+        LOGI('not chinese abstract: {}'.format(abstract))
+        return None
     save = {}
     timeout = 0
     while True:
@@ -400,19 +398,55 @@ def xsqkResult(driver):
                 time.sleep(perTime)
                 timeout += perTime
                 continue
-    for css in xsqkInfoCSS:
-        if isElementPresent(driver, By.CSS_SELECTOR, xsqkInfoCSS[css]):
+    for css in qkInfoCSS:
+        if isElementPresent(driver, By.CSS_SELECTOR, qkInfoCSS[css]):
             LOGI('find {}'.format(css))
-            eles = driver.find_elements(by = By.CSS_SELECTOR, value = xsqkInfoCSS[css])
-            infoStr = ''
-            for ele in eles:
-                infoStr += ele.text
-                infoStr += '  '
-            save[css] = infoStr
+            eles = driver.find_elements(by = By.CSS_SELECTOR, value = qkInfoCSS[css])
+            if len(eles) > 0:
+                infoStr = ''
+                if css == 'qk_institution':
+                    originInstitutionsList = eles[0].find_element(by = By.XPATH, value = '..').text.strip()
+                    print(originInstitutionsList)
+                    startIndex = 0
+                    mid = 0
+                    res = re.match(r'\d+. ', originInstitutionsList)
+                    if res is None:
+                        for ele in eles:
+                            infoStr += ele.text.strip()
+                            infoStr += '  '
+                    else:
+                        while True:
+                            startIndex = mid + res.span()[0]
+                            mid = mid + res.span()[1]
+                            res = re.search(r'\d+. ', originInstitutionsList[mid:])
+                            if res is not None:
+                                infoStr += originInstitutionsList[startIndex:mid + res.span()[0]].strip()
+                                infoStr += '  '
+                            else:
+                                infoStr += originInstitutionsList[startIndex:].strip()
+                                infoStr += '  '
+                                break
+                    print(infoStr.strip())
+                else:
+                    for ele in eles:
+                        infoStr += ele.text.strip()
+                        infoStr += '  '
+                save[css] = infoStr.strip()
     return save
 
 def hyResult(driver):
     # 会议
+    if not isElementPresent(driver, By.CSS_SELECTOR, r'span#ChDivSummary'):
+        return None
+    abstract = driver.find_element(by = By.CSS_SELECTOR, value = r'span#ChDivSummary').text
+    cnNum = 0
+    totalNum = len(abstract)
+    for char in abstract:
+        if char >= '\u4e00' and char <= '\u9fa5':
+            cnNum += 1
+    if cnNum/totalNum < cnPercent or totalNum < abstractLenThreshold:
+        LOGI('not chinese abstract: {}'.format(abstract))
+        return None
     save = {}
     timeout = 0
     while True:
@@ -446,27 +480,52 @@ def hyResult(driver):
         if isElementPresent(driver, By.CSS_SELECTOR, hyInfoCSS[css]):
             LOGI('find {}'.format(css))
             eles = driver.find_elements(by = By.CSS_SELECTOR, value = hyInfoCSS[css])
-            infoStr = ''
-            for ele in eles:
-                infoStr += ele.text
-                infoStr += '  '
-            save[css] = infoStr
+            if len(eles) > 0:
+                infoStr = ''
+                if css == 'hy_institution':
+                    originInstitutionsList = eles[0].find_element(by = By.XPATH, value = '..').text.strip()
+                    print(originInstitutionsList)
+                    startIndex = 0
+                    mid = 0
+                    res = re.match(r'\d+. ', originInstitutionsList)
+                    if res is None:
+                        for ele in eles:
+                            infoStr += ele.text.strip()
+                            infoStr += '  '
+                    else:
+                        while True:
+                            startIndex = mid + res.span()[0]
+                            mid = mid + res.span()[1]
+                            res = re.search(r'\d+. ', originInstitutionsList[mid:])
+                            if res is not None:
+                                infoStr += originInstitutionsList[startIndex:mid + res.span()[0]].strip()
+                                infoStr += '  '
+                            else:
+                                infoStr += originInstitutionsList[startIndex:].strip()
+                                infoStr += '  '
+                                break
+                    print(infoStr.strip())
+                else:
+                    for ele in eles:
+                        infoStr += ele.text.strip()
+                        infoStr += '  '
+                save[css] = infoStr.strip()
     if isElementPresent(driver, By.CSS_SELECTOR, hy_info):
         LOGI('find {}'.format(hy_info))
         eles = driver.find_elements(by = By.CSS_SELECTOR, value = hy_info)
         for ele in eles:
             if(ele.text == '会议名称：'):
                 LOGI('find hyname')
-                infoStr = ele.find_element(by = By.XPATH, value = '../p').text
-                save['hy_hyname'] = infoStr
+                infoStr = ele.find_element(by = By.XPATH, value = '../p').text.strip()
+                save['hy_hyname'] = infoStr.strip()
             elif(ele.text == '会议时间：'):
                 LOGI('find hytime')
-                infoStr = ele.find_element(by = By.XPATH, value = '../p').text
-                save['hy_hytime'] = infoStr
+                infoStr = ele.find_element(by = By.XPATH, value = '../p').text.strip()
+                save['hy_hytime'] = infoStr.strip()
             elif(ele.text == '会议地点：'):
                 LOGI('find hyolace')
-                infoStr = ele.find_element(by = By.XPATH, value = '../p').text
-                save['hy_hyplace'] = infoStr
+                infoStr = ele.find_element(by = By.XPATH, value = '../p').text.strip()
+                save['hy_hyplace'] = infoStr.strip()
     return save
 
 class crawler(threading.Thread):
@@ -484,7 +543,7 @@ class crawler(threading.Thread):
         self.startIndex = 0
         
         self.logFilePath = logFile
-        if self.carrier == 'xsqk':
+        if self.carrier == 'qk':
             self.logFilePath += '_0_'
         elif self.carrier == 'hy':
             self.logFilePath += '_1_'
@@ -492,7 +551,7 @@ class crawler(threading.Thread):
 
     def init(self):
         if self.startIndex == 0:
-            open(self.logFilePath, 'w+').close()
+            open(self.logFilePath, 'w+', encoding = 'utf-8').close()
         LOGI(self.carrier, self.index, 'init')
     def run(self):
         # try:
@@ -503,8 +562,10 @@ class crawler(threading.Thread):
             flag = self.crawlerArticles()
             LOGI(self.wxfl, "deinit")
             self.deinit()
-        db = getDB(self.carrier)
+        mongoClient = getClient()
+        db = mongoClient[self.carrier]
         db.summary.update_one(filter = {'class': self.wxfl}, update = {'$set': {'count': self.count}})
+        closeClient(mongoClient)
         sem.release()
         # except BaseException as e:
         #     print('0',e)
@@ -533,7 +594,8 @@ class crawler(threading.Thread):
         self.setName(self.wxfl)
         LOGI('载体:', self.carrier, '\t', '文献分类:', self.wxfl)
         if self.startIndex == 0:
-            db = getDB(self.carrier)
+            mongoClient = getClient()
+            db = mongoClient[self.carrier]
             db.summary.delete_one({'id': self.index})
             insertDict = {}
             insertDict['id'] = self.index
@@ -541,10 +603,13 @@ class crawler(threading.Thread):
             insertDict['count'] = 0
             db.summary.insert_one(insertDict)
             db[self.wxfl].drop()
+            closeClient(mongoClient)
         else:
-            db = getDB(self.carrier)
+            mongoClient = getClient()
+            db = mongoClient[self.carrier]
             self.count = db[self.wxfl].count_documents({})
-        f = open(self.logFilePath, 'a+')
+            closeClient(mongoClient)
+        f = open(self.logFilePath, 'a+', encoding = 'utf-8')
         f.write(self.wxfl)
         f.close()
         # 获取所有不可扩展分类
@@ -607,7 +672,7 @@ class crawler(threading.Thread):
                     self.necTexts.append(liAText)
                 except:
                     LOGI('join icon-select failed, next')
-        f = open(self.logFilePath, 'a+')
+        f = open(self.logFilePath, 'a+', encoding = 'utf-8')
         f.write(' {}{}'.format(len(self.necs), '\n'))
         f.close()
         for i in range(self.startIndex, len(self.necs)):
@@ -674,7 +739,7 @@ class crawler(threading.Thread):
                     time.sleep(perTime)
                     timeout += perTime
                     continue
-            f = open(self.logFilePath, 'a+')
+            f = open(self.logFilePath, 'a+', encoding = 'utf-8')
             f.write('\t{} {} {}\n'.format(i, self.necTexts[i], cnt))
             f.close()
         return True
