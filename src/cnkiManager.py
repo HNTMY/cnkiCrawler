@@ -281,8 +281,6 @@ def processResult(crawler):
                         driver.close()
                         LOGI('switch to {}'.format(newHighSearch))
                         driver.switch_to.window(newHighSearch)
-                    if i == 0:
-                        flag = True
                     break
                 try:
                     title = art.text
