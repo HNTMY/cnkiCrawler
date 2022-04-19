@@ -81,6 +81,7 @@ def openWxfl(carrier):
             driver.switch_to.window(highSearch)
             break
         except:
+            driver.quit()
             LOGI('select carrier error, try again')
             time.sleep(perTime)
             timeout += perTime
@@ -199,6 +200,7 @@ def processResult(crawler):
         maxNum = qkNum
     elif(carrier == 'hy'):
         maxNum = hyNum
+    timeoutNum = 0
     if isElementPresent(driver, By.CSS_SELECTOR, 'table.result-table-list>tbody'):
         while True:
             while len(driver.window_handles) != 1:
@@ -226,6 +228,9 @@ def processResult(crawler):
                 article = articles[i]
                 newTab = ''
                 try:
+                    if timeoutNum > timeOutTotal:
+                        timeoutNum = 0
+                        break
                     WebDriverWait(article, timeOutTotal, perTime).until(EC.presence_of_element_located((By.CSS_SELECTOR, 'td.name>a')))
                     LOGI('find article')
                     art = article.find_element(by = By.CSS_SELECTOR, value = 'td.name>a')
@@ -272,6 +277,7 @@ def processResult(crawler):
                     continue
                 except Exception:
                     LOGI('Exception, exit')
+                    timeoutNum += 1
                     if len(driver.window_handles) != currentWindowsNum:
                         LOGI('new tab')
                         newTab = driver.window_handles[len(driver.window_handles)-1]
@@ -281,6 +287,8 @@ def processResult(crawler):
                         driver.close()
                         LOGI('switch to {}'.format(newHighSearch))
                         driver.switch_to.window(newHighSearch)
+                    if i == 0:
+                        flag = True
                     break
                 try:
                     title = art.text
@@ -334,6 +342,7 @@ def processResult(crawler):
                     break
             if flag:
                 continue
+            timeoutNum = 0
             if len(saves) > 0:
                 mongoClient = getClient()
                 collection = mongoClient[crawler.carrier][crawler.wxfl]
@@ -407,7 +416,7 @@ def qkResult(driver):
                     print(originInstitutionsList)
                     startIndex = 0
                     mid = 0
-                    res = re.match(r'\d+. ', originInstitutionsList)
+                    res = re.match(r'\d+\. ', originInstitutionsList)
                     if res is None:
                         for ele in eles:
                             infoStr += ele.text.strip()
@@ -416,7 +425,7 @@ def qkResult(driver):
                         while True:
                             startIndex = mid + res.span()[0]
                             mid = mid + res.span()[1]
-                            res = re.search(r'\d+. ', originInstitutionsList[mid:])
+                            res = re.search(r'\d+\. ', originInstitutionsList[mid:])
                             if res is not None:
                                 infoStr += originInstitutionsList[startIndex:mid + res.span()[0]].strip()
                                 infoStr += '  '
