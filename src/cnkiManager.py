@@ -494,7 +494,7 @@ def hyResult(driver):
                     print(originInstitutionsList)
                     startIndex = 0
                     mid = 0
-                    res = re.match(r'\d+. ', originInstitutionsList)
+                    res = re.match(r'\d+\. ', originInstitutionsList)
                     if res is None:
                         for ele in eles:
                             infoStr += ele.text.strip()
@@ -503,7 +503,7 @@ def hyResult(driver):
                         while True:
                             startIndex = mid + res.span()[0]
                             mid = mid + res.span()[1]
-                            res = re.search(r'\d+. ', originInstitutionsList[mid:])
+                            res = re.search(r'\d+\. ', originInstitutionsList[mid:])
                             if res is not None:
                                 infoStr += originInstitutionsList[startIndex:mid + res.span()[0]].strip()
                                 infoStr += '  '
@@ -544,6 +544,7 @@ class crawler(threading.Thread):
         self.driver = None
         self.wxfl = None
         self.ecs = []
+        self.ecTexts = []
         self.necs = []
         self.necTexts = []
         self.count = 0
@@ -636,6 +637,11 @@ class crawler(threading.Thread):
                         tmpEle = div.find_element(by = By.CSS_SELECTOR, value = 'i.icon')
                         LOGI('click + icon')
                         self.driver.execute_script('arguments[0].click()', tmpEle)
+                        text = div.find_element(by = By.CSS_SELECTOR, value = 'a').text.strip()
+                        while(text == ''):
+                            LOGI('text is empty')
+                            text = div.find_element(by = By.CSS_SELECTOR, value = 'a').text.strip()
+                        self.ecTexts.append(text)
                         break
                     except:
                         LOGI('click + error, try again')
@@ -674,7 +680,10 @@ class crawler(threading.Thread):
                     self.necs.append(iconSelect)
                     WebDriverWait(li, timeOutTotal, 1).until(EC.presence_of_element_located((By.CSS_SELECTOR, 'a')))
                     LOGI('append necs text')
-                    liAText = div.find_element(by = By.CSS_SELECTOR, value = 'a').text
+                    liAText = div.find_element(by = By.CSS_SELECTOR, value = 'a').text.strip()
+                    while(liAText == ''):
+                        LOGI('text is empty')
+                        liAText = div.find_element(by = By.CSS_SELECTOR, value = 'a').text.strip()
                     LOGI(liAText)
                     self.necTexts.append(liAText)
                 except:
